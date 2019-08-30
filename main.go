@@ -29,7 +29,14 @@ type ResponsePathSuccess struct {
 }
 
 type ResponseNeighborsSuccess struct {
+	Length    int      `json:"length"`
 	Neighbors []string `json:"neighbors"`
+}
+
+type ResponseReachablesSuccess struct {
+	Length     int      `json:"length"`
+	Reachables []string `json:"reachables"`
+	Percent    float32  `json:"percent_of_graph"`
 }
 
 type ResponseError struct {
@@ -87,6 +94,42 @@ func findShortestPath(start string, end string, graph map[string][]string) []str
 	}
 
 	return nil
+}
+
+func reachable(start string, graph map[string][]string) []string {
+	dq := lane.NewDeque()
+	visited := make(map[string]bool)
+
+	dq.Append([]string{start})
+
+	for {
+		if dq.Empty() {
+			break
+		} else {
+			path := dq.Shift()
+
+			if p, ok := path.([]string); ok {
+				word := p[len(p)-1]
+				visited[word] = true
+
+				for _, adj := range graph[word] {
+					if _, found := visited[adj]; !found {
+						newPath := make([]string, len(p))
+						copy(newPath, p)
+						newPath = append(newPath, adj)
+						dq.Append(newPath)
+					}
+				}
+			}
+		}
+	}
+
+	reachableWords := make([]string, 0, len(visited))
+	for word := range visited {
+		reachableWords = append(reachableWords, word)
+	}
+
+	return reachableWords
 }
 
 func findLongestPath(start string, end string, graph map[string][]string) []string {
@@ -287,11 +330,40 @@ func neighborsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			resp := ResponseNeighborsSuccess{
+				Length:    len(neighbors),
 				Neighbors: neighbors,
 			}
 			respondValid(w, r, resp)
 			return
 		}
+	} else {
+		msg := fmt.Sprintf("Please provide a word of length >= %d and <= %d.", minLength, maxLength)
+		respondBadRequest(w, r, msg)
+		return
+	}
+}
+
+func reachableHandler(w http.ResponseWriter, r *http.Request) {
+	log.Print("STARTING NEIGHBORS")
+
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+
+	word := strings.ToLower(vars["word"])
+	wordLength := len(word)
+
+	if wordLength >= minLength && wordLength <= maxLength {
+		graph := allGraphs[wordLength]
+		reachableWords := reachable(word, graph)
+		percent := float32(len(reachableWords)) / float32(len(graph))
+
+		resp := ResponseReachablesSuccess{
+			Length:     len(reachableWords),
+			Percent:    percent,
+			Reachables: reachableWords,
+		}
+		respondValid(w, r, resp)
+		return
 	} else {
 		msg := fmt.Sprintf("Please provide a word of length >= %d and <= %d.", minLength, maxLength)
 		respondBadRequest(w, r, msg)
@@ -380,6 +452,7 @@ func main() {
 	}).Methods("GET")
 
 	router.HandleFunc("/neighbors/{word}", neighborsHandler).Methods("GET")
+	router.HandleFunc("/reachables/{word}", reachableHandler).Methods("GET")
 	router.HandleFunc("/stats/{length}", statsHandler).Methods("GET")
 	router.HandleFunc("/words/{length}", wordsHandler).Methods("GET")
 	http.Handle("/", router)
