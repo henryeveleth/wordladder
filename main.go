@@ -34,7 +34,7 @@ type ResponseNeighborsSuccess struct {
 }
 
 type ResponseReachablesSuccess struct {
-	Length     int      `json:"length"`
+	Count      int      `json:"count"`
 	Reachables []string `json:"reachables"`
 	Percent    float32  `json:"percent_of_graph"`
 }
@@ -358,7 +358,7 @@ func reachableHandler(w http.ResponseWriter, r *http.Request) {
 		percent := float32(len(reachableWords)) / float32(len(graph))
 
 		resp := ResponseReachablesSuccess{
-			Length:     len(reachableWords),
+			Count:      len(reachableWords),
 			Percent:    percent,
 			Reachables: reachableWords,
 		}
